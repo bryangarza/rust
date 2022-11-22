@@ -221,6 +221,7 @@ macro_rules! late_lint_mod_passes {
                 // May Depend on constants elsewhere
                 UnusedBrokenConst: UnusedBrokenConst,
                 UnstableFeatures: UnstableFeatures,
+                UngatedAsyncFnTrackCaller: UngatedAsyncFnTrackCaller,
                 ArrayIntoIter: ArrayIntoIter::default(),
                 DropTraitConstraints: DropTraitConstraints,
                 TemporaryCStringAsPtr: TemporaryCStringAsPtr,
