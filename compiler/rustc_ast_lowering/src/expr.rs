@@ -659,18 +659,15 @@ impl<'hir> LoweringContext<'_, 'hir> {
         let unstable_span =
             self.mark_span_with_reason(DesugaringKind::Async, span, self.allow_gen_future.clone());
 
-        let hir_id = if self.tcx.features().closure_track_caller {
+        let hir_id = self.lower_node_id(closure_node_id);
+        if self.tcx.features().closure_track_caller {
             let parent_has_track_caller = self
                 .attrs
                 .values()
-                .find(|attrs| {
-                    attrs.into_iter().find(|attr| attr.has_name(sym::track_caller)).is_some()
-                })
-                .is_some();
+                .any(|attrs| attrs.into_iter().any(|attr| attr.has_name(sym::track_caller)));
             if parent_has_track_caller {
-                let generator_hir_id = self.lower_node_id(closure_node_id);
                 self.lower_attrs(
-                    generator_hir_id,
+                    hir_id,
                     &[Attribute {
                         kind: AttrKind::Normal(ptr::P(NormalAttr {
                             item: AttrItem {
@@ -685,13 +682,8 @@ impl<'hir> LoweringContext<'_, 'hir> {
                         span: unstable_span,
                     }],
                 );
-                generator_hir_id
-            } else {
-                self.lower_node_id(closure_node_id)
             }
-        } else {
-            self.lower_node_id(closure_node_id)
-        };
+        }
 
         let generator = hir::Expr { hir_id, kind: generator_kind, span: self.lower_span(span) };
 
