@@ -56,6 +56,46 @@ async fn foo_track_caller() {
     bar_track_caller().await
 }
 
+struct Xyz;
+
+impl Xyz {
+
+    async fn baz() {
+        panic!()
+    }
+
+    async fn qux() {
+        Xyz::baz().await
+    }
+
+    #[track_caller] //[nofeat]~ WARN `#[track_caller]` on async functions is a no-op
+    async fn baz_track_caller() {
+        panic!()
+    }
+
+    async fn qux_track_caller() {
+        Xyz::baz_track_caller().await
+    }
+
+    async fn baz_self(&self) {
+        panic!()
+    }
+
+    async fn qux_self(&self) {
+        self.baz_self().await
+    }
+
+    #[track_caller] //[nofeat]~ WARN `#[track_caller]` on async functions is a no-op
+    async fn baz_self_track_caller(&self) {
+        panic!()
+    }
+
+    async fn qux_self_track_caller(&self) {
+        self.baz_self_track_caller().await
+    }
+
+}
+
 fn panicked_at(f: impl FnOnce() + panic::UnwindSafe) -> u32 {
     let loc = Arc::new(Mutex::new(None));
 
@@ -78,4 +118,17 @@ fn main() {
     assert_eq!(panicked_at(|| block_on(foo_track_caller())), 56);
     #[cfg(nofeat)]
     assert_eq!(panicked_at(|| block_on(foo_track_caller())), 52);
+
+    assert_eq!(panicked_at(|| block_on(Xyz::qux())), 64);
+    #[cfg(feat)]
+    assert_eq!(panicked_at(|| block_on(Xyz::qux_track_caller())), 77);
+    #[cfg(nofeat)]
+    assert_eq!(panicked_at(|| block_on(Xyz::qux_track_caller())), 73);
+
+    let xyz = Xyz;
+    assert_eq!(panicked_at(|| block_on(xyz.qux_self())), 81);
+    #[cfg(feat)]
+    assert_eq!(panicked_at(|| block_on(xyz.qux_self_track_caller())), 94);
+    #[cfg(nofeat)]
+    assert_eq!(panicked_at(|| block_on(xyz.qux_self_track_caller())), 90);
 }

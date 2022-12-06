@@ -10,5 +10,25 @@ LL | | }
    |
    = note: `#[warn(ungated_async_fn_track_caller)]` on by default
 
-warning: 1 warning emitted
+warning: `#[track_caller]` on async functions is a no-op
+  --> $DIR/panic-track-caller.rs:71:5
+   |
+LL |       #[track_caller]
+   |       ^^^^^^^^^^^^^^^ help: enable this unstable feature: `closure_track_caller`
+LL | /     async fn baz_track_caller() {
+LL | |         panic!()
+LL | |     }
+   | |_____- this function will not propagate the caller location
+
+warning: `#[track_caller]` on async functions is a no-op
+  --> $DIR/panic-track-caller.rs:88:5
+   |
+LL |       #[track_caller]
+   |       ^^^^^^^^^^^^^^^ help: enable this unstable feature: `closure_track_caller`
+LL | /     async fn baz_self_track_caller(&self) {
+LL | |         panic!()
+LL | |     }
+   | |_____- this function will not propagate the caller location
+
+warning: 3 warnings emitted
 

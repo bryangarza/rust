@@ -1364,7 +1364,7 @@ impl<'tcx> LateLintPass<'tcx> for UngatedAsyncFnTrackCaller {
         span: Span,
         hir_id: HirId,
     ) {
-        if let HirFnKind::ItemFn(_, _, _) = fn_kind && fn_kind.asyncness() == IsAsync::Async && !cx.tcx.features().closure_track_caller {
+        if fn_kind.asyncness() == IsAsync::Async && !cx.tcx.features().closure_track_caller {
             // Now, check if the function has the `#[track_caller]` attribute
             let attrs = cx.tcx.hir().attrs(hir_id);
             let maybe_track_caller = attrs.iter().find(|attr| attr.has_name(sym::track_caller));

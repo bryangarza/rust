@@ -7,6 +7,7 @@ use super::errors::{
 use super::ResolverAstLoweringExt;
 use super::{ImplTraitContext, LoweringContext, ParamMode, ParenthesizedGenericArgs};
 use crate::{FnDeclKind, ImplTraitPosition};
+use hir::HirId;
 use rustc_ast::attr;
 use rustc_ast::ptr::P as AstP;
 use rustc_ast::*;
@@ -152,6 +153,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                     .make_async_expr(
                         capture_clause,
                         closure_node_id,
+                        None,
                         None,
                         block.span,
                         hir::AsyncGeneratorKind::Block,
@@ -588,6 +590,9 @@ impl<'hir> LoweringContext<'_, 'hir> {
         &mut self,
         capture_clause: CaptureBy,
         closure_node_id: NodeId,
+        // The ID of the item that originally contained the async expr (which
+        // could be an async fn, for example)
+        maybe_item_hir_id: Option<HirId>, 
         ret_ty: Option<AstP<Ty>>,
         span: Span,
         async_gen_kind: hir::AsyncGeneratorKind,
@@ -661,10 +666,10 @@ impl<'hir> LoweringContext<'_, 'hir> {
 
         let hir_id = self.lower_node_id(closure_node_id);
         if self.tcx.features().closure_track_caller {
-            let parent_has_track_caller = self
-                .attrs
-                .values()
-                .any(|attrs| attrs.into_iter().any(|attr| attr.has_name(sym::track_caller)));
+            let parent_has_track_caller = maybe_item_hir_id.map(|item_hir_id| {
+                let maybe_item_attrs = self.attrs.get(&item_hir_id.local_id);
+                maybe_item_attrs.map(|item_attrs| item_attrs.into_iter().any(|attr| attr.has_name(sym::track_caller)))
+            }).flatten().unwrap_or(false);
             if parent_has_track_caller {
                 self.lower_attrs(
                     hir_id,
@@ -1007,6 +1012,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 let async_body = this.make_async_expr(
                     capture_clause,
                     inner_closure_id,
+                    None,
                     async_ret_ty,
                     body.span,
                     hir::AsyncGeneratorKind::Closure,
