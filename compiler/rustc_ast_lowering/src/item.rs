@@ -269,8 +269,13 @@ impl<'hir> LoweringContext<'_, 'hir> {
                     // only cares about the input argument patterns in the function
                     // declaration (decl), not the return types.
                     let asyncness = header.asyncness;
-                    let body_id =
-                        this.lower_maybe_async_body(span, hir_id, &decl, asyncness, body.as_deref());
+                    let body_id = this.lower_maybe_async_body(
+                        span,
+                        hir_id,
+                        &decl,
+                        asyncness,
+                        body.as_deref(),
+                    );
 
                     let mut itctx = ImplTraitContext::Universal;
                     let (generics, decl) = this.lower_generics(generics, id, &mut itctx, |this| {
@@ -899,8 +904,13 @@ impl<'hir> LoweringContext<'_, 'hir> {
             AssocItemKind::Fn(box Fn { sig, generics, body, .. }) => {
                 self.current_item = Some(i.span);
                 let asyncness = sig.header.asyncness;
-                let body_id =
-                    self.lower_maybe_async_body(i.span, hir_id, &sig.decl, asyncness, body.as_deref());
+                let body_id = self.lower_maybe_async_body(
+                    i.span,
+                    hir_id,
+                    &sig.decl,
+                    asyncness,
+                    body.as_deref(),
+                );
                 let (generics, sig) = self.lower_method_sig(
                     generics,
                     sig,

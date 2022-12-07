@@ -592,7 +592,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
         closure_node_id: NodeId,
         // The ID of the item that originally contained the async expr (which
         // could be an async fn, for example)
-        maybe_item_hir_id: Option<HirId>, 
+        maybe_item_hir_id: Option<HirId>,
         ret_ty: Option<AstP<Ty>>,
         span: Span,
         async_gen_kind: hir::AsyncGeneratorKind,
@@ -666,10 +666,15 @@ impl<'hir> LoweringContext<'_, 'hir> {
 
         let hir_id = self.lower_node_id(closure_node_id);
         if self.tcx.features().closure_track_caller {
-            let parent_has_track_caller = maybe_item_hir_id.map(|item_hir_id| {
-                let maybe_item_attrs = self.attrs.get(&item_hir_id.local_id);
-                maybe_item_attrs.map(|item_attrs| item_attrs.into_iter().any(|attr| attr.has_name(sym::track_caller)))
-            }).flatten().unwrap_or(false);
+            let parent_has_track_caller = maybe_item_hir_id
+                .map(|item_hir_id| {
+                    let maybe_item_attrs = self.attrs.get(&item_hir_id.local_id);
+                    maybe_item_attrs.map(|item_attrs| {
+                        item_attrs.into_iter().any(|attr| attr.has_name(sym::track_caller))
+                    })
+                })
+                .flatten()
+                .unwrap_or(false);
             if parent_has_track_caller {
                 self.lower_attrs(
                     hir_id,
