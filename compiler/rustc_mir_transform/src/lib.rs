@@ -55,6 +55,7 @@ mod const_goto;
 mod const_prop;
 mod const_prop_lint;
 mod coverage;
+mod ctfe_limit;
 mod dataflow_const_prop;
 mod dead_store_elimination;
 mod deaggregator;
@@ -527,6 +528,7 @@ fn run_runtime_lowering_passes<'tcx>(tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
         // CTFE support for aggregates.
         &deaggregator::Deaggregator,
         &Lint(const_prop_lint::ConstProp),
+        &ctfe_limit::CtfeLimit,
     ];
     pm::run_passes_no_validate(tcx, body, passes, Some(MirPhase::Runtime(RuntimePhase::Initial)));
 }

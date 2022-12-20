@@ -394,6 +394,7 @@ impl<'tcx> rustc_mir_dataflow::GenKillAnalysis<'tcx> for Borrows<'_, 'tcx> {
             | mir::StatementKind::AscribeUserType(..)
             | mir::StatementKind::Coverage(..)
             | mir::StatementKind::Intrinsic(..)
+            | mir::StatementKind::ConstEvalCounter
             | mir::StatementKind::Nop => {}
         }
     }

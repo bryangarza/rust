@@ -576,6 +576,7 @@ impl WriteInfo {
                 self.add_place(**place);
             }
             StatementKind::Intrinsic(_)
+            | StatementKind::ConstEvalCounter
             | StatementKind::Nop
             | StatementKind::Coverage(_)
             | StatementKind::StorageLive(_)
