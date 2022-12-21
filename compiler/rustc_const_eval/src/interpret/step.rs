@@ -131,7 +131,7 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
 
             // FIXME(bryangarza): Update this to do some logic!!!
             ConstEvalCounter => {
-                info!("At ConstEvalCounter");
+                self.increment_const_eval_counter();
             }
 
             // Defined to do nothing. These are added by optimization passes, to avoid changing the

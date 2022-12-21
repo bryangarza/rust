@@ -14,9 +14,10 @@ impl<'tcx> MirPass<'tcx> for CtfeLimit {
         //info!("Got body with {} basic blocks: {:#?}", body.basic_blocks.len(), body.basic_blocks);
         //info!("With doms: {doms:?}");
 
+        /*
         for (index, basic_block) in body.basic_blocks.iter().enumerate() {
-            info!("bb{index}: {basic_block:#?}");
-        }
+            info!("bb{index}: {basic_block:#?}")
+        }*/
         for (index, basic_block) in body.basic_blocks.iter().enumerate() {
             info!(
                 "bb{index} -> successors = {:?}",
