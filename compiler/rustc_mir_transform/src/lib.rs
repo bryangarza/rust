@@ -98,6 +98,7 @@ mod simplify_comparison_integral;
 mod sroa;
 mod uninhabited_enum_branching;
 mod unreachable_prop;
+mod valgrind_client_request;
 
 use rustc_const_eval::transform::check_consts::{self, ConstCx};
 use rustc_const_eval::transform::promote_consts;
@@ -589,6 +590,7 @@ fn run_optimization_passes<'tcx>(tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
             // Some cleanup necessary at least for LLVM and potentially other codegen backends.
             &add_call_guards::CriticalCallEdges,
             // Dump the end result for testing and debugging purposes.
+            &valgrind_client_request::ValgrindClientRequest,
             &dump_mir::Marker("PreCodegen"),
         ],
         Some(MirPhase::Runtime(RuntimePhase::Optimized)),
