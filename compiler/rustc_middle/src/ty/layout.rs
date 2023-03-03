@@ -680,7 +680,11 @@ where
                 | ty::GeneratorWitnessMIR(..)
                 | ty::Foreign(..)
                 | ty::Dynamic(_, _, ty::Dyn) => {
-                    bug!("TyAndLayout::field({:?}): not applicable", this)
+                    bug!(
+                        "TyAndLayout::field({:?}): not applicable for kind {:?}",
+                        this,
+                        this.ty.kind()
+                    )
                 }
 
                 // Potentially-fat pointers.

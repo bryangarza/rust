@@ -1473,6 +1473,8 @@ options! {
         `=except-unused-generics`
         `=except-unused-functions`
         `=off` (default)"),
+    instrument_krabcake: bool = (false, parse_bool, [TRACKED],
+        "insert Valgrind client requests to communicate with Krabcake"),
     instrument_mcount: bool = (false, parse_bool, [TRACKED],
         "insert function instrument code for mcount-based tracing (default: no)"),
     instrument_xray: Option<InstrumentXRay> = (None, parse_instrument_xray, [TRACKED],

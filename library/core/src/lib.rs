@@ -376,6 +376,11 @@ pub mod task;
 #[allow(missing_docs)]
 pub mod alloc;
 
+/// blah
+// There is no issue created for krabcake yet so just using a placeholder
+#[unstable(feature = "instrument_krabcake", issue = "1")]
+pub mod krabcake;
+
 // note: does not need to be public
 mod bool;
 mod tuple;

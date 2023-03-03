@@ -179,4 +179,16 @@ impl<'tcx> MirPatch<'tcx> {
         };
         Self::source_info_for_index(data, loc)
     }
+
+    pub fn terminator_for_location(
+        &self,
+        body: &Body<'tcx>,
+        loc: Location,
+    ) -> Option<Terminator<'tcx>> {
+        let data = match loc.block.index().checked_sub(body.basic_blocks.len()) {
+            Some(new) => &self.new_blocks[new],
+            None => &body[loc.block],
+        };
+        data.terminator.clone()
+    }
 }
