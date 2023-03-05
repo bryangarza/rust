@@ -754,6 +754,7 @@ fn test_unstable_options_tracking_hash() {
     tracked!(inline_mir_hint_threshold, Some(123));
     tracked!(inline_mir_threshold, Some(123));
     tracked!(instrument_coverage, Some(InstrumentCoverage::All));
+    tracked!(instrument_krabcake, false);
     tracked!(instrument_mcount, true);
     tracked!(instrument_xray, Some(InstrumentXRay::default()));
     tracked!(link_directives, false);

@@ -9,6 +9,11 @@ pub struct ValgrindClientRequest;
 impl<'tcx> MirPass<'tcx> for ValgrindClientRequest {
     #[instrument(skip(self, tcx, body))]
     fn run_pass(&self, tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
+        if !tcx.sess.opts.unstable_opts.instrument_krabcake {
+            info!("Not instrumenting for krabcake");
+            return;
+        }
+        info!("Instrumenting for krabcake now...");
         let bbs = body.basic_blocks_mut();
 
         let template_piece = InlineAsmTemplatePiece::String(String::from("nop"));
@@ -37,20 +42,20 @@ impl<'tcx> MirPass<'tcx> for ValgrindClientRequest {
         // Take last block
         let original_last_block =
             bbs.get_mut(BasicBlock::from_usize(len - 1)).expect("No last block!!");
+        // create new block whose terminator is clone of original
+        let new_bb = BasicBlockData {
+            statements: vec![],
+            terminator: original_last_block.terminator.to_owned(),
+            is_cleanup: false,
+        };
 
         // Duplicate the last block's terminator
         let mut new_terminator =
             original_last_block.terminator.as_ref().expect("No terminator!!").clone();
 
         // modify original terminator (should now be asm pointing to next block)
-        let original_last_block_terminator = original_last_block.terminator_mut();
         new_terminator.kind = asm_terminator_kind;
-        // create new block whose terminator is clone of original
-        let new_bb = BasicBlockData {
-            statements: vec![],
-            terminator: Some(original_last_block_terminator.to_owned()),
-            is_cleanup: false,
-        };
+        original_last_block.terminator = Some(new_terminator);
 
         bbs.push(new_bb);
     }
