@@ -1,14 +1,15 @@
 use crate::MirPass;
 
 use rustc_ast::ast::{InlineAsmOptions, InlineAsmTemplatePiece};
-use rustc_middle::mir::{BasicBlock, BasicBlockData, Body, TerminatorKind, /*InlineAsmOperand,*/ Statement, StatementKind, Rvalue, AggregateKind, Operand, Constant, ConstantKind, Place};
+use rustc_middle::mir::{
+    AggregateKind, BasicBlock, BasicBlockData, Body, Constant, ConstantKind, Operand, Place,
+    Rvalue, /*InlineAsmOperand,*/ TerminatorKind,
+};
 use rustc_middle::ty::TyCtxt;
-use rustc_index::vec::Idx;
-use rustc_middle::mir::Local;
 //use rustc_target::asm::{InlineAsmReg, InlineAsmRegClass, X86InlineAsmReg};
+use rustc_middle::mir::patch::MirPatch;
+use rustc_middle::mir::Location;
 use rustc_middle::ty::ParamEnv;
-use rustc_middle::mir::LocalDecl;
-use core::iter::Extend;
 
 pub struct ValgrindClientRequest;
 
@@ -20,15 +21,15 @@ impl<'tcx> MirPass<'tcx> for ValgrindClientRequest {
             return;
         }
         info!("Instrumenting for krabcake now...");
-        let next_local = body.local_decls.len();
-        let bbs = body.basic_blocks_mut();
+        let bbs = &body.basic_blocks;
 
-        let template_piece = InlineAsmTemplatePiece::String(
-            String::from("rol rdi, 3\n\
+        let template_piece = InlineAsmTemplatePiece::String(String::from(
+            "rol rdi, 3\n\
                         rol rdi, 13\n\
                         rol rdi, 61\n\
                         rol rdi, 51\n\
-                        xchg rbx, rbx"));
+                        xchg rbx, rbx",
+        ));
         //let template = std::slice::from_ref(tcx.arena.alloc(template_piece));
         let template = tcx.arena.alloc_from_iter([template_piece]);
 
@@ -57,65 +58,39 @@ impl<'tcx> MirPass<'tcx> for ValgrindClientRequest {
         // (A -> (B -> (C -> (D -> (E+asm -> (F -> end))))))
 
         let len = bbs.len();
-        // Take last block
-        let original_last_block =
-            bbs.get_mut(BasicBlock::from_usize(len - 1)).expect("No last block!!");
+        let last_block_index = BasicBlock::from_usize(len - 1);
+        let statements_len = bbs[last_block_index].statements.len();
+        let last_block = bbs.get(last_block_index).expect("No last block!!");
 
-        /*
-        let original_last_block_last_stmt_source_info = original_last_block.statements
-            .last()
-            .expect("Last block has no statements!")
-            .source_info
-            .clone();
-            */
+        let array_ty = tcx.mk_array(tcx.types.u64, 6);
 
         let lit = |n: u128| ConstantKind::from_bits(tcx, n, ParamEnv::empty().and(tcx.types.u64));
         let op = |n: u128| {
             Operand::Constant(Box::new(Constant {
-                span: original_last_block.terminator().source_info.span,
+                span: last_block.terminator().source_info.span,
                 user_ty: None,
                 literal: lit(n),
             }))
         };
 
-        let array_ty = tcx.mk_array(tcx.types.u64, 6);
         let rvalue = Rvalue::Aggregate(
             Box::new(AggregateKind::Array(tcx.types.u64)),
             vec![op(1), op(2), op(3), op(4), op(5), op(6)],
         );
 
-        /*
-        let place = Place {
-            local: Local::from_usize(1),
-            projection: List::empty(),
-        };
-        */
-        let local_decl = LocalDecl::new(array_ty, original_last_block.terminator().source_info.span);
-        let place = Place::from(Local::new(next_local));
-        let kind = StatementKind::Assign(Box::new((place, rvalue)));
+        let mut patch = MirPatch::new(body);
+        let new_temp = patch.new_temp(array_ty, last_block.terminator().source_info.span);
+        let last_block_end = Location { block: last_block_index, statement_index: statements_len };
+        patch.add_assign(last_block_end, Place::from(new_temp), rvalue);
 
-        let stmt1 = Statement {
-            source_info: original_last_block.terminator().source_info,
-            kind,
-        };
-
-        // create new block whose terminator is clone of original
         let new_bb = BasicBlockData {
             statements: vec![],
-            terminator: original_last_block.terminator.to_owned(),
+            terminator: last_block.terminator.to_owned(),
             is_cleanup: false,
         };
 
-        // Duplicate the last block's terminator
-        let mut new_terminator =
-            original_last_block.terminator.as_ref().expect("No terminator!!").clone();
-
-        // modify original terminator (should now be asm pointing to next block)
-        new_terminator.kind = asm_terminator_kind;
-        original_last_block.statements.push(stmt1);
-        original_last_block.terminator = Some(new_terminator);
-
-        bbs.push(new_bb);
-        body.local_decls.extend(vec![local_decl]);
+        patch.patch_terminator(last_block_index, asm_terminator_kind);
+        patch.new_block(new_bb);
+        patch.apply(body);
     }
 }
