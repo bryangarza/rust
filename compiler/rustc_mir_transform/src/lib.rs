@@ -589,8 +589,8 @@ fn run_optimization_passes<'tcx>(tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
             &large_enums::EnumSizeOpt { discrepancy: 128 },
             // Some cleanup necessary at least for LLVM and potentially other codegen backends.
             &add_call_guards::CriticalCallEdges,
-            // Dump the end result for testing and debugging purposes.
             &valgrind_client_request::ValgrindClientRequest,
+            // Dump the end result for testing and debugging purposes.
             &dump_mir::Marker("PreCodegen"),
         ],
         Some(MirPhase::Runtime(RuntimePhase::Optimized)),

@@ -1,15 +1,17 @@
 use crate::MirPass;
 
 use rustc_ast::ast::{InlineAsmOptions, InlineAsmTemplatePiece};
-use rustc_middle::mir::{
-    AggregateKind, BasicBlock, BasicBlockData, Body, Constant, ConstantKind, Operand, Place,
-    Rvalue, /*InlineAsmOperand,*/ TerminatorKind,
-};
-use rustc_middle::ty::TyCtxt;
-//use rustc_target::asm::{InlineAsmReg, InlineAsmRegClass, X86InlineAsmReg};
+use rustc_ast::Mutability;
 use rustc_middle::mir::patch::MirPatch;
 use rustc_middle::mir::Location;
+use rustc_middle::mir::{
+    AggregateKind, BasicBlock, BasicBlockData, Body, Constant, ConstantKind, InlineAsmOperand,
+    Operand, Place, Rvalue, TerminatorKind,
+};
 use rustc_middle::ty::ParamEnv;
+use rustc_middle::ty::{Ty, TyCtxt, TypeAndMut};
+use rustc_span::Span;
+use rustc_target::asm::{InlineAsmReg, InlineAsmRegOrRegClass, X86InlineAsmReg};
 
 pub struct ValgrindClientRequest;
 
@@ -23,74 +25,135 @@ impl<'tcx> MirPass<'tcx> for ValgrindClientRequest {
         info!("Instrumenting for krabcake now...");
         let bbs = &body.basic_blocks;
 
-        let template_piece = InlineAsmTemplatePiece::String(String::from(
-            "rol rdi, 3\n\
-                        rol rdi, 13\n\
-                        rol rdi, 61\n\
-                        rol rdi, 51\n\
-                        xchg rbx, rbx",
-        ));
-        //let template = std::slice::from_ref(tcx.arena.alloc(template_piece));
-        let template = tcx.arena.alloc_from_iter([template_piece]);
-
-        // Doesn't really work right now cause template = &mut &[InlineAsmTemplatePiece; 1]
-        // and what I need is &'tcx [InlineAsmTemplatePiece]
-
-        /*
-        let in_operand = InlineAsmOperand::In {
-            reg: InlineAsmReg::Reg(InlineAsmRegClass::X86(X86InlineAsmReg::ax)),
-            value: Operand::Move(Place),
-        };
-        */
-        let asm_terminator_kind = TerminatorKind::InlineAsm {
-            template,
-            operands: vec![], //Vec<InlineAsmOperand<'tcx>>,
-            options: InlineAsmOptions::empty(),
-            line_spans: &[],
-            destination: Some(bbs.next_index()),
-            cleanup: None,
-        };
-
-        // For some context, I am trying to basically insert some inline assembly at the end of
-        // the list of basic blockg
-        // basically
-        // (A -> (B -> (C -> (D -> (E -> end)))))
-        // (A -> (B -> (C -> (D -> (E+asm -> (F -> end))))))
-
-        let len = bbs.len();
-        let last_block_index = BasicBlock::from_usize(len - 1);
-        let statements_len = bbs[last_block_index].statements.len();
-        let last_block = bbs.get(last_block_index).expect("No last block!!");
-
-        let array_ty = tcx.mk_array(tcx.types.u64, 6);
-
-        let lit = |n: u128| ConstantKind::from_bits(tcx, n, ParamEnv::empty().and(tcx.types.u64));
-        let op = |n: u128| {
-            Operand::Constant(Box::new(Constant {
-                span: last_block.terminator().source_info.span,
-                user_ty: None,
-                literal: lit(n),
-            }))
-        };
-
-        let rvalue = Rvalue::Aggregate(
-            Box::new(AggregateKind::Array(tcx.types.u64)),
-            vec![op(1), op(2), op(3), op(4), op(5), op(6)],
-        );
+        let target_block_index = BasicBlock::from_usize(1);
+        let statements_len = bbs[target_block_index].statements.len();
+        let target_block = bbs.get(target_block_index).expect("No last block!!");
 
         let mut patch = MirPatch::new(body);
-        let new_temp = patch.new_temp(array_ty, last_block.terminator().source_info.span);
-        let last_block_end = Location { block: last_block_index, statement_index: statements_len };
-        patch.add_assign(last_block_end, Place::from(new_temp), rvalue);
+        let target_block_end =
+            Location { block: target_block_index, statement_index: statements_len };
+
+        let array_ty = tcx.mk_array(tcx.types.u64, 6);
+        let span = target_block.terminator().source_info.span;
+        let array_place = add_assign_array(tcx, &mut patch, span, array_ty, target_block_end);
+        let array_raw_ptr_place = add_assign_array_raw_ptr(
+            tcx,
+            &mut patch,
+            span,
+            array_ty,
+            target_block_end,
+            array_place,
+        );
+        let zzq_result = add_assign_zzq_result(tcx, &mut patch, span, target_block_end);
+        patch_terminator_with_asm(
+            tcx,
+            &mut patch,
+            array_raw_ptr_place,
+            bbs.next_index(),
+            target_block_index,
+            zzq_result,
+        );
 
         let new_bb = BasicBlockData {
             statements: vec![],
-            terminator: last_block.terminator.to_owned(),
+            terminator: target_block.terminator.to_owned(),
             is_cleanup: false,
         };
 
-        patch.patch_terminator(last_block_index, asm_terminator_kind);
         patch.new_block(new_bb);
         patch.apply(body);
     }
+}
+
+fn add_assign_array<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    patch: &mut MirPatch<'tcx>,
+    span: Span,
+    array_ty: Ty<'tcx>,
+    loc: Location,
+) -> Place<'tcx> {
+    let lit = |n: u128| ConstantKind::from_bits(tcx, n, ParamEnv::empty().and(tcx.types.u64));
+    let op =
+        |n: u128| Operand::Constant(Box::new(Constant { span, user_ty: None, literal: lit(n) }));
+
+    let rvalue = Rvalue::Aggregate(
+        Box::new(AggregateKind::Array(tcx.types.u64)),
+        vec![op(0x4b430000), op(2), op(3), op(4), op(5), op(6)],
+    );
+    let temp = patch.new_temp(array_ty, span);
+    let place = Place::from(temp);
+    patch.add_assign(loc, place, rvalue);
+    place
+}
+
+fn add_assign_array_raw_ptr<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    patch: &mut MirPatch<'tcx>,
+    span: Span,
+    array_ty: Ty<'tcx>,
+    loc: Location,
+    array_place: Place<'tcx>,
+) -> Place<'tcx> {
+    let rvalue = Rvalue::AddressOf(Mutability::Not, array_place);
+    let ptr_ty = tcx.mk_ptr(TypeAndMut { ty: array_ty, mutbl: Mutability::Not });
+    let new_temp = patch.new_temp(ptr_ty, span);
+    let place = Place::from(new_temp);
+    patch.add_assign(loc, place, rvalue);
+    place
+}
+
+fn add_assign_zzq_result<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    patch: &mut MirPatch<'tcx>,
+    span: Span,
+    loc: Location,
+) -> Place<'tcx> {
+    let lit = |n: u128| ConstantKind::from_bits(tcx, n, ParamEnv::empty().and(tcx.types.u64));
+    let op =
+        |n: u128| Operand::Constant(Box::new(Constant { span, user_ty: None, literal: lit(n) }));
+    let rvalue = Rvalue::Use(op(0x77));
+    let new_temp = patch.new_temp(tcx.types.u64, span);
+    let place = Place::from(new_temp);
+    patch.add_assign(loc, place, rvalue);
+    place
+}
+
+fn patch_terminator_with_asm<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    patch: &mut MirPatch<'tcx>,
+    array_raw_ptr_place: Place<'tcx>,
+    destination: BasicBlock,
+    block_to_patch: BasicBlock,
+    zzq_result: Place<'tcx>,
+) {
+    let template_piece = InlineAsmTemplatePiece::String(String::from(
+        "rol rdi, 3\n\
+        rol rdi, 13\n\
+        rol rdi, 61\n\
+        rol rdi, 51\n\
+        xchg rbx, rbx",
+    ));
+    //let template = std::slice::from_ref(tcx.arena.alloc(template_piece));
+    let template = tcx.arena.alloc_from_iter([template_piece]);
+    let operand1 = InlineAsmOperand::InOut {
+        reg: InlineAsmRegOrRegClass::Reg(InlineAsmReg::X86(X86InlineAsmReg::di)),
+        late: false,
+        in_value: Operand::Copy(zzq_result),
+        out_place: Some(zzq_result),
+    };
+    let operand2 = InlineAsmOperand::In {
+        reg: InlineAsmRegOrRegClass::Reg(InlineAsmReg::X86(X86InlineAsmReg::ax)),
+        value: Operand::Move(array_raw_ptr_place),
+    };
+
+    let asm_terminator_kind = TerminatorKind::InlineAsm {
+        template,
+        operands: vec![operand1, operand2], //Vec<InlineAsmOperand<'tcx>>,
+        options: InlineAsmOptions::empty(),
+        line_spans: &[],
+        destination: Some(destination),
+        cleanup: None,
+    };
+
+    patch.patch_terminator(block_to_patch, asm_terminator_kind);
 }
