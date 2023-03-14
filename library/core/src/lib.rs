@@ -376,6 +376,10 @@ pub mod task;
 #[allow(missing_docs)]
 pub mod alloc;
 
+/// blah
+#[unstable(feature = "gen_future", issue = "50547")]
+pub mod krabcake;
+
 // note: does not need to be public
 mod bool;
 mod tuple;

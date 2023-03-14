@@ -824,6 +824,7 @@ symbols! {
         inline_const,
         inline_const_pat,
         inout,
+        insert_krabcake_request,
         instruction_set,
         integer_: "integer",
         integral,
