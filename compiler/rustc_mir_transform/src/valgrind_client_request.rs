@@ -78,7 +78,7 @@ fn call_ikr<'tcx>(
 
     patch.add_assign(loc, place, rvalue);
 
-    let my_operand = Operand::Copy(place);
+    let krabcake_req_operand = Operand::Copy(place);
 
     let orig_terminator = patch.terminator_for_location(body, loc);
     let ikr_did = tcx.lang_items().insert_krabcake_request_fn().unwrap();
@@ -94,7 +94,7 @@ fn call_ikr<'tcx>(
     let storage = Place::from(storage);
     let fn_call_terminator_kind = TerminatorKind::Call {
         func,
-        args: vec![my_operand],
+        args: vec![krabcake_req_operand],
         destination: storage,
         target: Some(loc.block + 1),
         cleanup: None,

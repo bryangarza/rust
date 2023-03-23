@@ -46,7 +46,8 @@ mod vg_c_compatible {
 
 /// blah
 /// #[doc(hidden)]
-#[unstable(feature = "gen_future", issue = "50547")]
+// There is no issue created for krabcake yet so just using a placeholder
+#[unstable(feature = "instrument_krabcake", issue = "1")]
 #[cfg_attr(not(bootstrap), lang = "KrabcakeRequest")]
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
@@ -59,7 +60,8 @@ pub enum KrabcakeRequest {
 }
 
 #[doc(hidden)]
-#[unstable(feature = "gen_future", issue = "50547")]
+// There is no issue created for krabcake yet so just using a placeholder
+#[unstable(feature = "instrument_krabcake", issue = "1")]
 #[inline(never)]
 #[cfg_attr(not(bootstrap), lang = "insert_krabcake_request")]
 pub fn insert_krabcake_request(req: KrabcakeRequest) {
@@ -90,5 +92,4 @@ pub fn insert_krabcake_request(req: KrabcakeRequest) {
         );
     }
     let _ = res;
-    //panic!("I HOPE THIS WORKS");
 }
