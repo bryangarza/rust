@@ -216,6 +216,7 @@ symbols! {
         ItemContext,
         Iterator,
         IteratorItem,
+        KrabcakeRequest,
         Layout,
         Left,
         LinkedList,

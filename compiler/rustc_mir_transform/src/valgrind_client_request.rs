@@ -1,18 +1,14 @@
 use crate::MirPass;
 
-// use rustc_ast::ast::{InlineAsmOptions, InlineAsmTemplatePiece};
-// use rustc_ast::Mutability;
+use rustc_index::vec::Idx;
 use rustc_middle::mir::patch::MirPatch;
-// use rustc_middle::mir::Location;
 use rustc_middle::mir::{
-    /*AggregateKind,*/ BasicBlock, BasicBlockData, Body, Constant,
-    ConstantKind, /*InlineAsmOperand,*/
-    Operand, Place, /* Rvalue, */ TerminatorKind,
+    AggregateKind, BasicBlockData, Body, Constant, ConstantKind, Location, NonDivergingIntrinsic,
+    Operand, Place, Rvalue, StatementKind, TerminatorKind,
 };
 use rustc_middle::ty::InternalSubsts;
 use rustc_middle::ty::TyCtxt;
-// use rustc_span::Span;
-// use rustc_target::asm::{InlineAsmReg, InlineAsmRegOrRegClass, X86InlineAsmReg};
+use rustc_target::abi::VariantIdx;
 
 pub struct ValgrindClientRequest;
 
@@ -24,162 +20,93 @@ impl<'tcx> MirPass<'tcx> for ValgrindClientRequest {
             return;
         }
         info!("Instrumenting for krabcake now...");
-        let bbs = &body.basic_blocks;
-
-        let target_block_index = BasicBlock::from_usize(1);
-        // let statements_len = bbs[target_block_index].statements.len();
-        let target_block = bbs.get(target_block_index).expect("No last block!!");
-
         let mut patch = MirPatch::new(body);
-        // let target_block_end =
-        //     Location { block: target_block_index, statement_index: statements_len };
 
-        // let array_ty = tcx.mk_array(tcx.types.u64, 6);
-        let span = target_block.terminator().source_info.span;
-        // let array_place = add_assign_array(tcx, &mut patch, span, array_ty, target_block_end);
-        // let array_raw_ptr_place = add_assign_array_raw_ptr(
-        //     tcx,
-        //     &mut patch,
-        //     span,
-        //     array_ty,
-        //     target_block_end,
-        //     array_place,
-        // );
-        // let zzq_result = add_assign_zzq_result(tcx, &mut patch, span, target_block_end);
-        // patch_terminator_with_asm(
-        //     tcx,
-        //     &mut patch,
-        //     array_raw_ptr_place,
-        //     bbs.next_index(),
-        //     target_block_index,
-        //     zzq_result,
-        // );
+        for (block_index, block_data) in body.basic_blocks.iter_enumerated() {
+            for (stmt_index, stmt) in block_data.statements.iter().enumerate() {
+                match &stmt.kind {
+                    StatementKind::Intrinsic(box NonDivergingIntrinsic::Assume(operand)) => {
+                        let loc = Location { block: block_index, statement_index: stmt_index };
+                        info!("Found assume intrinsic (operand={operand:?}. At {loc:?}");
+                        patch = call_ikr(tcx, patch, body, loc, operand);
+                    }
+                    _ => (),
+                }
+            }
+        }
 
-        let ikr_did = tcx.lang_items().insert_krabcake_request_fn().unwrap();
-        let substs = InternalSubsts::identity_for_item(tcx, ikr_did);
-        let ikr_ty = tcx.mk_fn_def(ikr_did, substs);
-
-        let func = Operand::Constant(Box::new(Constant {
-            span,
-            user_ty: None,
-            literal: ConstantKind::zero_sized(ikr_ty),
-        }));
-        let storage = patch.new_temp(tcx.mk_mut_ptr(tcx.types.unit), span);
-        let storage = Place::from(storage);
-        let fn_call_terminator_kind = TerminatorKind::Call {
-            func,
-            args: vec![],
-            // args: vec![Operand::Move(ref_loc)],
-            destination: storage,
-            target: Some(bbs.next_index()),
-            cleanup: None,
-            // cleanup: Some(cleanup),
-            from_hir_call: false, // Not sure
-            fn_span: span,
-        };
-
-        patch.patch_terminator(target_block_index, fn_call_terminator_kind);
-
-        let new_bb = BasicBlockData {
-            statements: vec![],
-            terminator: target_block.terminator.to_owned(),
-            is_cleanup: false,
-        };
-
-        patch.new_block(new_bb);
         patch.apply(body);
     }
 }
 
-// fn add_assign_array<'tcx>(
-//     tcx: TyCtxt<'tcx>,
-//     patch: &mut MirPatch<'tcx>,
-//     span: Span,
-//     array_ty: Ty<'tcx>,
-//     loc: Location,
-// ) -> Place<'tcx> {
-//     let lit = |n: u128| ConstantKind::from_bits(tcx, n, ParamEnv::empty().and(tcx.types.u64));
-//     let op =
-//         |n: u128| Operand::Constant(Box::new(Constant { span, user_ty: None, literal: lit(n) }));
+fn call_ikr<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    mut patch: MirPatch<'tcx>,
+    body: &Body<'tcx>,
+    loc: Location,
+    _operand: &Operand<'tcx>,
+) -> MirPatch<'tcx> {
+    let span = patch.source_info_for_location(body, loc).span;
 
-//     let rvalue = Rvalue::Aggregate(
-//         Box::new(AggregateKind::Array(tcx.types.u64)),
-//         vec![op(0x4b430000), op(2), op(3), op(4), op(5), op(6)],
-//     );
-//     let temp = patch.new_temp(array_ty, span);
-//     let place = Place::from(temp);
-//     patch.add_assign(loc, place, rvalue);
-//     place
-// }
+    let op = |flag: bool| {
+        Operand::Constant(Box::new(Constant {
+            span,
+            user_ty: None,
+            literal: ConstantKind::from_bool(tcx, flag),
+        }))
+    };
 
-// fn add_assign_array_raw_ptr<'tcx>(
-//     tcx: TyCtxt<'tcx>,
-//     patch: &mut MirPatch<'tcx>,
-//     span: Span,
-//     array_ty: Ty<'tcx>,
-//     loc: Location,
-//     array_place: Place<'tcx>,
-// ) -> Place<'tcx> {
-//     let rvalue = Rvalue::AddressOf(Mutability::Not, array_place);
-//     let ptr_ty = tcx.mk_ptr(TypeAndMut { ty: array_ty, mutbl: Mutability::Not });
-//     let new_temp = patch.new_temp(ptr_ty, span);
-//     let place = Place::from(new_temp);
-//     patch.add_assign(loc, place, rvalue);
-//     place
-// }
+    let (place, rvalue) = {
+        let krabcake_req_did = tcx.lang_items().krabcake_request().unwrap();
+        let krabcake_req_substs = InternalSubsts::identity_for_item(tcx, krabcake_req_did);
+        let krabcake_req_def = tcx.adt_def(krabcake_req_did);
+        let krabcake_req_ty = tcx.mk_adt(krabcake_req_def, krabcake_req_substs);
+        let rvalue = Rvalue::Aggregate(
+            Box::new(AggregateKind::Adt(
+                krabcake_req_did,
+                VariantIdx::new(0),
+                &krabcake_req_substs,
+                None,
+                None,
+            )),
+            vec![op(true)],
+        );
+        let temp = patch.new_temp(krabcake_req_ty, span);
+        let place = Place::from(temp);
+        (place, rvalue)
+    };
 
-// fn add_assign_zzq_result<'tcx>(
-//     tcx: TyCtxt<'tcx>,
-//     patch: &mut MirPatch<'tcx>,
-//     span: Span,
-//     loc: Location,
-// ) -> Place<'tcx> {
-//     let lit = |n: u128| ConstantKind::from_bits(tcx, n, ParamEnv::empty().and(tcx.types.u64));
-//     let op =
-//         |n: u128| Operand::Constant(Box::new(Constant { span, user_ty: None, literal: lit(n) }));
-//     let rvalue = Rvalue::Use(op(0x77));
-//     let new_temp = patch.new_temp(tcx.types.u64, span);
-//     let place = Place::from(new_temp);
-//     patch.add_assign(loc, place, rvalue);
-//     place
-// }
+    patch.add_assign(loc, place, rvalue);
 
-// fn patch_terminator_with_asm<'tcx>(
-//     tcx: TyCtxt<'tcx>,
-//     patch: &mut MirPatch<'tcx>,
-//     array_raw_ptr_place: Place<'tcx>,
-//     destination: BasicBlock,
-//     block_to_patch: BasicBlock,
-//     zzq_result: Place<'tcx>,
-// ) {
-//     let template_piece = InlineAsmTemplatePiece::String(String::from(
-//         "rol rdi, 3\n\
-//         rol rdi, 13\n\
-//         rol rdi, 61\n\
-//         rol rdi, 51\n\
-//         xchg rbx, rbx",
-//     ));
-//     //let template = std::slice::from_ref(tcx.arena.alloc(template_piece));
-//     let template = tcx.arena.alloc_from_iter([template_piece]);
-//     let operand1 = InlineAsmOperand::InOut {
-//         reg: InlineAsmRegOrRegClass::Reg(InlineAsmReg::X86(X86InlineAsmReg::di)),
-//         late: false,
-//         in_value: Operand::Copy(zzq_result),
-//         out_place: Some(zzq_result),
-//     };
-//     let operand2 = InlineAsmOperand::In {
-//         reg: InlineAsmRegOrRegClass::Reg(InlineAsmReg::X86(X86InlineAsmReg::ax)),
-//         value: Operand::Move(array_raw_ptr_place),
-//     };
+    let my_operand = Operand::Copy(place);
 
-//     let asm_terminator_kind = TerminatorKind::InlineAsm {
-//         template,
-//         operands: vec![operand1, operand2], //Vec<InlineAsmOperand<'tcx>>,
-//         options: InlineAsmOptions::empty(),
-//         line_spans: &[],
-//         destination: Some(destination),
-//         cleanup: None,
-//     };
+    let orig_terminator = patch.terminator_for_location(body, loc);
+    let ikr_did = tcx.lang_items().insert_krabcake_request_fn().unwrap();
+    let ikr_substs = InternalSubsts::identity_for_item(tcx, ikr_did);
+    let ikr_ty = tcx.mk_fn_def(ikr_did, ikr_substs);
 
-//     patch.patch_terminator(block_to_patch, asm_terminator_kind);
-// }
+    let func = Operand::Constant(Box::new(Constant {
+        span,
+        user_ty: None,
+        literal: ConstantKind::zero_sized(ikr_ty),
+    }));
+    let storage = patch.new_temp(tcx.mk_mut_ptr(tcx.types.unit), span);
+    let storage = Place::from(storage);
+    let fn_call_terminator_kind = TerminatorKind::Call {
+        func,
+        args: vec![my_operand],
+        destination: storage,
+        target: Some(loc.block + 1),
+        cleanup: None,
+        from_hir_call: false,
+        fn_span: span,
+    };
+
+    patch.patch_terminator(loc.block, fn_call_terminator_kind);
+
+    let new_bb =
+        BasicBlockData { statements: vec![], terminator: orig_terminator, is_cleanup: false };
+
+    patch.new_block(new_bb);
+    patch
+}
