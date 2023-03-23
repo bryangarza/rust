@@ -147,6 +147,8 @@ pub fn extract(attrs: &[ast::Attribute]) -> Option<(Symbol, Span)> {
 
 language_item_table! {
 //  Variant name,            Name,                     Getter method name,         Target                  Generic requirements;
+    KrabcakeRequest,         sym::KrabcakeRequest,     krabcake_request,           Target::Enum,           GenericRequirement::None;
+    InsertKrabcakeRequest,   sym::insert_krabcake_request, insert_krabcake_request_fn, Target::Fn,         GenericRequirement::None;
     Sized,                   sym::sized,               sized_trait,                Target::Trait,          GenericRequirement::Exact(0);
     Unsize,                  sym::unsize,              unsize_trait,               Target::Trait,          GenericRequirement::Minimum(1);
     /// Trait injected by `#[derive(PartialEq)]`, (i.e. "Partial EQ").
